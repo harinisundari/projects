@@ -2,66 +2,67 @@
 pipeline {
     agent any
 
-    environment {
-        PATH = "/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin"
-        DOCKER_IMAGE = "harinisundari/week9-registration:v1"
-    }
+   environment {
+    PATH = "/usr/local/bin:/opt/homebrew/bin:${env.PATH}"
+    DOCKER_IMAGE = 'harinisundari/devops_week12:latest'
+}
 
     stages {
-        stage('Build Docker Image') {
+        stage('Checkout') {
             steps {
-                sh '''
-                    echo "Checking Docker..."
-                    /usr/local/bin/docker --version
-                    docker build -t week9-registration:v1 .
-                '''
+                checkout scm
             }
         }
 
-        stage('Docker Login') {
+        
+stage('Run Tests') {
+    steps {
+        sh 'python3 -m pip install -r requirements.txt'
+        sh 'python3 -m pip install pytest selenium webdriver-manager'
+        sh 'python3 -m pytest tests/ -v'
+    }
+}
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t "$DOCKER_IMAGE" .'
+            }
+        }
+
+        stage('Push to Docker Hub') {
             steps {
                 withCredentials([
                     usernamePassword(
                         credentialsId: 'dockerhub-creds-global',
                         usernameVariable: 'DOCKER_USER',
-                        passwordVariable: 'DOCKER_PASS'
+                        passwordVariable: 'DOCKER_TOKEN'
                     )
                 ]) {
                     sh '''
-                        echo "$DOCKER_PASS" | docker login \
-                            -u "$DOCKER_USER" --password-stdin
+                        echo "$DOCKER_TOKEN" |
+                            docker login -u "$DOCKER_USER" --password-stdin
+                        docker push "$DOCKER_IMAGE"
+                        docker logout
                     '''
                 }
             }
         }
 
-        stage('Push Docker Image to Docker Hub') {
-            steps {
-                sh '''
-                    docker tag week9-registration:v1 "$DOCKER_IMAGE"
-                    docker push "$DOCKER_IMAGE"
-                '''
-            }
-        }
-
         stage('Deploy to Kubernetes') {
             steps {
-                sh '''
-                    kubectl apply -f deployment.yaml
-                    kubectl apply -f service.yaml
-                    kubectl get deployments
-                    kubectl get services
-                '''
+                sh 'kubectl apply -f deployment.yaml'
+                sh 'kubectl apply -f service.yaml'
+                sh 'kubectl rollout status deployment/week12-deployment --timeout=120s'
             }
         }
     }
 
     post {
         success {
-            echo 'Pipeline completed successfully!'
+            echo 'Week 12 pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed. Please check Console Output.'
+            echo 'Pipeline failed. Check Console Output for the error.'
         }
     }
 }

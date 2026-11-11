@@ -1,11 +1,14 @@
-FROM python:3.9-slim-buster
+
+FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY . /app
-
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 5001
+COPY app.py .
+COPY templates/ templates/
 
-CMD ["python3", "app.py"]
+EXPOSE 5000
+
+CMD ["python", "app.py"]
